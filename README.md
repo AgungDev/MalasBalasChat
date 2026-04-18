@@ -1,31 +1,28 @@
-# 🤖 WhatsApp Auto Reply Bot
+# 🤖 WhatsApp Auto Reply Bot (Node.js)
 
-Bot WhatsApp berbasis Golang yang mampu membalas pesan secara otomatis menggunakan AI, dengan gaya percakapan yang dapat dikonfigurasi **per individu** melalui database PostgreSQL.
+Bot WhatsApp berbasis Node.js yang menggunakan **Baileys** untuk WhatsApp Web dan **OpenAI** untuk membalas pesan otomatis. Sistem tetap menggunakan database PostgreSQL untuk menyimpan persona dan mapping nomor.
 
-Project ini dirancang menggunakan **Clean Architecture**, sehingga scalable, modular, dan mudah dikembangkan.
+Project ini dibangun dengan gaya modular dan clean architecture supaya mudah diadaptasi, dikembangkan, dan diintegrasikan dengan backend lain.
 
 ---
 
 # 🚀 Features
 
-* Auto-reply WhatsApp (via WhatsApp Web)
-* AI-generated response (custom prompt)
-* Persona / gaya chat berbeda per user:
-
-  * Pacar → manja 😏
-  * Teman → santai 😄
-  * Kerjaan → formal 🧠
-* Config berbasis database (PostgreSQL)
-* Support multiple persona
-* Clean architecture (layered)
-* Dockerized environment
-* Environment-based configuration
+* WhatsApp Web integration via `@whiskeysockets/baileys`
+* Multi-file auth state session storage
+* Auto-reply dengan AI
+* Persona / gaya chat per kontak
+* Database-driven persona mapping
+* Role / whitelist-based reply gating
+* Random reply delay untuk kesan natural
+* Optional skip reply behavior
+* Dockerized Node.js service
 
 ---
 
 # ⚠️ Disclaimer
 
-Project ini menggunakan pendekatan **non-official WhatsApp integration**.
+Pendekatan ini menggunakan WhatsApp Web yang tidak resmi.
 
 Risiko:
 
@@ -38,40 +35,48 @@ Gunakan dengan bijak.
 
 # 🧠 Architecture Overview
 
-Struktur mengikuti Clean Architecture:
+Struktur project Node.js:
 
 ```
-├── cmd/                 # entry point
-├── internal/
-│   ├── entity/          # entity & interface
-│   ├── usecase/         # business logic
-│   ├── repository/      # database implementation
-│   ├── controller/        # handler (Gin / WA event)
-│   └── infrastructure/  # external services (DB, AI, WA)
-├── configs/             # config loader
-├── pkg/                 # shared utilities
-├── docker/
-└── .env
+node-whatsapp/
+├── src/
+│   ├── config.js
+│   ├── index.js
+│   ├── server.js
+│   ├── repository/
+│   │   └── postgresRepository.js
+│   ├── services/
+│   │   ├── aiService.js
+│   │   └── whatsappClient.js
+│   ├── usecases/
+│   │   └── replyUsecase.js
+│   └── utils/
+│       └── random.js
+├── package.json
+├── .env.example
+└── README.md
 ```
 
 ---
 
-# 🔄 Flow System
+# 🔄 Bot Flow
 
 ```
-Incoming WhatsApp Message
-        ↓
-Extract Sender Number
-        ↓
-Fetch Persona from Database
-        ↓
-Generate Prompt
-        ↓
-Send to AI
-        ↓
-Return Response
-        ↓
-Send Back to WhatsApp
+Incoming WhatsApp message
+          ↓
+Extract remoteJid and message text
+          ↓
+Normalize sender phone number
+          ↓
+Fetch persona from PostgreSQL
+          ↓
+Check whitelist / allowed role
+          ↓
+Optionally skip reply
+          ↓
+Generate reply with OpenAI
+          ↓
+Send reply back via Baileys
 ```
 
 ---
@@ -80,7 +85,7 @@ Send Back to WhatsApp
 
 ## users
 
-Menyimpan data kontak
+Menyimpan kontak WhatsApp dan role.
 
 | field | type   |
 | ----- | ------ |
@@ -93,7 +98,7 @@ Menyimpan data kontak
 
 ## personas
 
-Menyimpan gaya komunikasi
+Menyimpan gaya komunikasi / prompt.
 
 | field         | type |
 | ------------- | ---- |
@@ -101,16 +106,11 @@ Menyimpan gaya komunikasi
 | name          | text |
 | system_prompt | text |
 
-Contoh:
-
-* "balas santai, sedikit manja, kadang hehe"
-* "formal, jelas, profesional"
-
 ---
 
 ## user_personas
 
-Relasi user ke persona
+Relasi user ke persona.
 
 | field      | type |
 | ---------- | ---- |
@@ -122,12 +122,11 @@ Relasi user ke persona
 
 # ⚙️ Tech Stack
 
-* Golang
-* Gin (HTTP server / API)
+* Node.js
+* Baileys (`@whiskeysockets/baileys`)
 * PostgreSQL
+* OpenAI API
 * Docker
-* WhatsApp Web client (unofficial)
-* OpenAI API (AI response)
 
 ---
 
@@ -140,27 +139,39 @@ version: '3.9'
 
 services:
   app-malaschat:
-    build: .
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
     container_name: wa-bot
     ports:
-      - "9092:8080"
+      - "9092:3001"
     env_file:
       - .env
     depends_on:
       - db-malaschat
+    networks:
+      - malaschat-network
+    restart: on-failure
 
   db-malaschat:
     image: postgres:15
-    container_name: postgres
+    container_name: postgres-malaschat
     restart: always
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
-      POSTGRES_DB: wa_bot
+      POSTGRES_DB: malaschat_bot
     ports:
       - "5444:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    networks:
+      - malaschat-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   pgdata:
@@ -175,7 +186,7 @@ networks:
 # 🔐 Environment Variables (.env)
 
 ```
-APP_PORT=8080
+APP_PORT=9092
 
 DB_HOST=db-malaschat
 DB_PORT=5432
@@ -183,9 +194,15 @@ DB_USER=postgres
 DB_PASSWORD=password
 DB_NAME=malaschat_bot
 
-OPENAI_API_KEY=your_api_key
+OPENAI_API_KEY=your_api_key_here
 
-WHATSAPP_SESSION=./session
+WHATSAPP_SESSION_DIR=./session
+WHITELIST_NUMBERS=628123456789,628987654321
+ALLOWED_ROLES=whitelist,pacar,teman
+MAX_REPLY_LENGTH=360
+SKIP_REPLY_RATE=0.2
+REPLY_DELAY_MIN=3000
+REPLY_DELAY_MAX=15000
 ```
 
 ---
@@ -196,97 +213,47 @@ WHATSAPP_SESSION=./session
 docker-compose up --build
 ```
 
----
-
-# 📡 API Endpoint (Gin)
-
-## Create User
-
-```
-POST /users
-```
-
-## Assign Persona
-
-```
-POST /users/:id/persona
-```
-
-## Create Persona
-
-```
-POST /personas
-```
+Service is exposed at `http://localhost:9092`.
 
 ---
 
-# 🧩 Core Usecases
+# 📡 HTTP API
 
-* Get Persona by Phone
-* Generate AI Response
-* Send WhatsApp Message
-* Fallback to Default Persona
+The Node.js bot also exposes simple endpoints:
 
----
+* `GET /health` — service health
+* `GET /status` — WhatsApp socket status
+* `POST /send` — manual send via WhatsApp
 
-# 🧠 AI Prompt Strategy
+Example request:
 
-System prompt diambil dari database.
-
-Contoh:
-
-```
-Lu adalah pacar yang perhatian, santai, dan sedikit manja.
-Gunakan bahasa Indonesia informal.
-Kadang pakai "hehe" atau "ih".
-```
-
-User message:
-
-```
-"Lagi apa?"
+```bash
+curl -X POST http://localhost:9092/send \
+  -H "Content-Type: application/json" \
+  -d '{"remoteJid":"628123456789@s.whatsapp.net","text":"Halo"}'
 ```
 
 ---
 
-# 🔄 Future Improvements
+# 🧠 Behavior
 
-* Multi-persona per user (context aware)
-* Time-based persona (pagi formal, malam santai)
-* Dashboard UI (admin panel)
-* Message queue (RabbitMQ / Kafka)
-* Rate limiting & anti-ban strategy
-* Typing simulation (delay + human-like behavior)
-
----
-
-# 🧪 Development Strategy
-
-Gunakan Copilot untuk:
-
-* generate repository layer
-* generate usecase
-* generate handler gin
-* generate struct & interface
-
-Fokus manual:
-
-* arsitektur
-* flow logic
-* prompt design
+* Only replies to allowed roles or whitelisted numbers
+* Adds random delay before reply
+* Limits reply length for natural tone
+* May skip replies to simulate human behavior
+* Uses persona prompt from PostgreSQL
 
 ---
 
-# 💀 Real Talk
+# 💡 Notes
 
-Bot ini bisa:
+* Keep `OPENAI_API_KEY` out of source control
+* `WHATSAPP_SESSION_DIR` stores Baileys session files
+* Use the existing PostgreSQL schema for persona mapping
 
-* bantu komunikasi
-* bikin hidup lebih efisien
+---
 
-Tapi juga bisa:
+# ✅ Integration
 
-* bikin hubungan jadi “fake”
-
-Gunakan sebagai **assistant**, bukan pengganti diri.
+The Node.js service is standalone and easy to integrate with other services via shared DB or REST API.
 

@@ -1,0 +1,8 @@
+# Baileys session state
+session/
+
+# Node modules
+node_modules/
+
+# Environment
+.env
