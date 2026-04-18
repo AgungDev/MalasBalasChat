@@ -25,36 +25,96 @@ class ReplyUsecase {
     );
   }
 
-  async createReply(remoteJid, messageText) {
-    const phone = normalizePhone(remoteJid);
+  async createReply(senderJid, messageText, { senderPn } = {}) {
+    const phone = normalizePhone(senderJid);
     console.info('ReplyUsecase: received incoming message', {
-      remoteJid,
+      senderJid,
+      senderPn,
       phone,
       textPreview: messageText ? messageText.slice(0, 120) : null,
     });
 
-    if (!phone || !messageText) {
-      console.warn('ReplyUsecase: missing phone or message text, skipping reply', { remoteJid });
+    if (!senderJid || !messageText) {
+      console.warn('ReplyUsecase: missing senderJid or message text, skipping reply', { senderJid });
       return null;
     }
 
-    const userPersona = await this.repository.getUserPersonaByPhone(phone);
+    let userPersona = await this.repository.getUserPersonaByPhone(senderJid);
+    if (!userPersona && senderPn) {
+      const personaByPn = await this.repository.getUserPersonaByPhone(senderPn);
+      if (personaByPn) {
+        console.info('ReplyUsecase: linked LID sender to existing persona via senderPn', {
+          senderJid,
+          senderPn,
+          userId: personaByPn.user_id,
+        });
+        await this.repository.updateUserJid(personaByPn.user_id, senderJid);
+        userPersona = personaByPn;
+      }
+    }
+
     if (!userPersona) {
-      console.warn('ReplyUsecase: user persona not found for phone', { phone });
+      const user = await this.repository.getUserByPhone(senderJid);
+      if (user && user.role) {
+        const personaByRole = await this.repository.getPersonaByName(user.role);
+        if (personaByRole) {
+          await this.repository.assignPersonaToUser(user.id, personaByRole.id);
+          userPersona = {
+            user_id: user.id,
+            phone: user.phone,
+            jid: user.jid,
+            user_name: user.name,
+            role: user.role,
+            persona_id: personaByRole.id,
+            persona_name: personaByRole.name,
+            system_prompt: personaByRole.system_prompt,
+          };
+          console.info('ReplyUsecase: auto-linked user role to persona', {
+            senderJid,
+            senderPn,
+            userId: user.id,
+            role: user.role,
+            personaName: personaByRole.name,
+          });
+        }
+      }
+    }
+
+    if (userPersona && userPersona.role && userPersona.persona_name && userPersona.role !== userPersona.persona_name) {
+      const personaByRole = await this.repository.getPersonaByName(userPersona.role);
+      if (personaByRole && personaByRole.id !== userPersona.persona_id) {
+        await this.repository.assignPersonaToUser(userPersona.user_id, personaByRole.id);
+        userPersona.persona_id = personaByRole.id;
+        userPersona.persona_name = personaByRole.name;
+        userPersona.system_prompt = personaByRole.system_prompt;
+        console.info('ReplyUsecase: updated persona assignment to match role', {
+          senderJid,
+          senderPn,
+          userId: userPersona.user_id,
+          role: userPersona.role,
+          personaName: userPersona.persona_name,
+        });
+      }
+    }
+
+    if (!userPersona) {
+      console.warn('ReplyUsecase: user persona not found for sender', { senderJid, senderPn, phone });
       return null;
     }
 
+    const contactPhone = userPersona.phone || phone;
     console.info('ReplyUsecase: found persona mapping', {
       userId: userPersona.user_id,
       phone: userPersona.phone,
+      jid: userPersona.jid,
       role: userPersona.role,
       personaId: userPersona.persona_id,
       personaName: userPersona.persona_name,
     });
 
-    if (!this.isAllowedContact(userPersona.role, phone)) {
+    if (!this.isAllowedContact(userPersona.role, contactPhone)) {
       console.warn('ReplyUsecase: contact not allowed to receive reply', {
-        phone,
+        phone: contactPhone,
         role: userPersona.role,
         allowedRoles: this.config.allowedRoles,
       });
@@ -77,7 +137,7 @@ class ReplyUsecase {
 
     const finalReply = truncateMessage(reply, this.config.maxReplyLength);
     console.info('ReplyUsecase: generated reply', {
-      replyPreview: finalReply.slice(0, 120),
+      replyPreview: finalReply ? finalReply.slice(0, 120) : null,
       maxReplyLength: this.config.maxReplyLength,
     });
 

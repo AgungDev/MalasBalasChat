@@ -1,27 +1,33 @@
 const path = require('path');
 const config = require('./config');
 const PostgresRepository = require('./repository/postgresRepository');
-const OpenAIService = require('./services/aiService');
+const OpenAIService = require('./services/openAIService');
+const GeminiService = require('./services/geminiService');
+const GroqService = require('./services/groqService');
+const AIService = require('./services/aiService');
 const ReplyUsecase = require('./usecases/replyUsecase');
 const WhatsAppClient = require('./services/whatsappClient');
 const { createServer } = require('./server');
 
 async function start() {
-  if (!config.openAI.apiKey) {
-    throw new Error('OPENAI_API_KEY is required in environment.');
+  if (!config.openAI.apiKey && !config.gemini.apiKey && !config.groq.apiKey) {
+    throw new Error('OPENAI_API_KEY, GEMINI_API_KEY, or GROQ_API_KEY is required in environment.');
   }
 
   const repository = new PostgresRepository(config.db);
   await repository.connect();
   await repository.initializeSchema();
 
-  const aiService = new OpenAIService(config.openAI);
+  const openAIService = config.openAI.apiKey ? new OpenAIService(config.openAI) : null;
+  const geminiService = config.gemini.apiKey ? new GeminiService(config.gemini) : null;
+  const groqService = config.groq.apiKey ? new GroqService(config.groq) : null;
+  const aiService = new AIService(openAIService, geminiService, groqService);
   const replyUsecase = new ReplyUsecase(repository, aiService, config.whatsapp);
 
   const whatsappClient = new WhatsAppClient({
     sessionDir: path.resolve(process.cwd(), config.whatsapp.sessionDir),
     onMessage: async (payload) => {
-      const { remoteJid, text } = payload;
+      const { remoteJid, senderJid, senderPn, text } = payload;
       if (
         !remoteJid ||
         (!remoteJid.endsWith('@s.whatsapp.net') && !remoteJid.endsWith('@c.us') && !remoteJid.endsWith('@lid'))
@@ -30,9 +36,9 @@ async function start() {
       }
 
       try {
-        const reply = await replyUsecase.createReply(remoteJid, text);
+        const reply = await replyUsecase.createReply(senderJid, text, { senderPn });
         if (!reply) {
-          console.warn('Index: no reply generated for message', { remoteJid });
+          console.warn('Index: no reply generated for message', { remoteJid, senderJid, senderPn });
           return;
         }
 

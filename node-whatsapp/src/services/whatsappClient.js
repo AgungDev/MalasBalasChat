@@ -1,4 +1,10 @@
-const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, DisconnectReason } = require('@whiskeysockets/baileys');
+const {
+  default: makeWASocket,
+  useMultiFileAuthState,
+  fetchLatestBaileysVersion,
+  DisconnectReason,
+  isLidUser,
+} = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const QRCode = require('qrcode-terminal');
 
@@ -70,9 +76,27 @@ class WhatsAppClient {
           textPreview: text.slice(0, 120),
         });
 
+        const senderJid = message.key.participant || message.key.sender || message.key.senderPn || message.key.remoteJid;
+        let senderPn = message.key.senderPn || null;
+
+        if (!senderPn && senderJid && isLidUser(senderJid) && this.socket?.signalRepository?.lidMapping?.getPNForLID) {
+          try {
+            senderPn = await this.socket.signalRepository.lidMapping.getPNForLID(senderJid);
+            if (senderPn) {
+              console.info('WhatsAppClient: resolved senderPn for LID sender', {
+                senderJid,
+                senderPn,
+              });
+            }
+          } catch (error) {
+            console.warn('WhatsAppClient: error resolving senderPn for LID sender', { senderJid, error: error.message });
+          }
+        }
+
         const payload = {
           remoteJid: message.key.remoteJid,
-          sender: message.key.remoteJid,
+          senderJid,
+          senderPn,
           text,
           messageId: message.key.id,
         };

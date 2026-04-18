@@ -27,6 +27,14 @@ module.exports = {
     apiKey: process.env.OPENAI_API_KEY || '',
     model: process.env.OPENAI_MODEL || 'gpt-3.5-turbo',
   },
+  gemini: {
+    apiKey: process.env.GEMINI_API_KEY || '',
+    model: process.env.GEMINI_MODEL || 'gemini-1.5-pro',
+  },
+  groq: {
+    apiKey: process.env.GROQ_API_KEY || '',
+    model: process.env.GROQ_MODEL || 'llama-3.1-8b-instant',
+  },
   whatsapp: {
     sessionDir: process.env.WHATSAPP_SESSION_DIR || './node-whatsapp/session',
     allowedRoles: parseNumberList(process.env.ALLOWED_ROLES || ''),

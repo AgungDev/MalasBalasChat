@@ -1,4 +1,5 @@
 const { Pool } = require('pg');
+const { normalizePhone, normalizeJid } = require('../utils/random');
 
 class PostgresRepository {
   constructor(config) {
@@ -37,11 +38,15 @@ class PostgresRepository {
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
         phone TEXT NOT NULL UNIQUE,
+        jid TEXT UNIQUE,
         name TEXT NOT NULL,
         role TEXT NOT NULL,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
       );
+
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS jid TEXT UNIQUE;
 
       CREATE TABLE IF NOT EXISTS user_personas (
         user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -99,27 +104,43 @@ class PostgresRepository {
     return result.rowCount > 0;
   }
 
-  async createUser({ phone, name, role }) {
+  async createUser({ phone, jid, name, role }) {
     const cleanedPhone = phone ? phone.replace(/[^0-9]/g, '') : null;
+    const normalizedJid = normalizeJid(jid);
     const result = await this.pool.query(
-      `INSERT INTO users (phone, name, role) VALUES ($1, $2, $3) RETURNING id, phone, name, role, created_at, updated_at`,
-      [cleanedPhone, name, role],
+      `INSERT INTO users (phone, jid, name, role) VALUES ($1, $2, $3, $4) RETURNING id, phone, jid, name, role, created_at, updated_at`,
+      [cleanedPhone, normalizedJid, name, role],
     );
     return result.rows[0];
   }
 
   async getAllUsers() {
     const result = await this.pool.query(
-      `SELECT id, phone, name, role, created_at, updated_at FROM users ORDER BY id ASC`,
+      `SELECT id, phone, jid, name, role, created_at, updated_at FROM users ORDER BY id ASC`,
     );
     return result.rows;
   }
 
   async getUserByPhone(phone) {
-    const cleanedPhone = phone ? phone.replace(/[^0-9]/g, '') : null;
+    const cleanedPhone = normalizePhone(phone);
+    const normalizedJid = phone && phone.includes('@') ? normalizeJid(phone) : null;
     const result = await this.pool.query(
-      `SELECT id, phone, name, role, created_at, updated_at FROM users WHERE regexp_replace(phone, '[^0-9]', '', 'g') = $1 LIMIT 1`,
-      [cleanedPhone],
+      `SELECT id, phone, jid, name, role, created_at, updated_at FROM users
+       WHERE (lower(jid) = $1 OR regexp_replace(phone, '[^0-9]', '', 'g') = $2)
+       LIMIT 1`,
+      [normalizedJid, cleanedPhone],
+    );
+    return result.rows[0] || null;
+  }
+
+  async updateUserJid(userId, jid) {
+    const normalizedJid = normalizeJid(jid);
+    const result = await this.pool.query(
+      `UPDATE users
+       SET jid = COALESCE(NULLIF($1, ''), jid), updated_at = now()
+       WHERE id = $2
+       RETURNING id, phone, jid, name, role, created_at, updated_at`,
+      [normalizedJid, userId],
     );
     return result.rows[0] || null;
   }
@@ -151,7 +172,7 @@ class PostgresRepository {
 
   async getUserById(id) {
     const result = await this.pool.query(
-      `SELECT id, phone, name, role, created_at, updated_at FROM users WHERE id = $1`,
+      `SELECT id, phone, jid, name, role, created_at, updated_at FROM users WHERE id = $1`,
       [id],
     );
     return result.rows[0] || null;
@@ -177,12 +198,15 @@ class PostgresRepository {
     return result.rowCount > 0;
   }
 
-  async getUserPersonaByPhone(phone) {
+  async getUserPersonaByPhone(phoneOrJid) {
+    const cleanedPhone = normalizePhone(phoneOrJid);
+    const normalizedJid = phoneOrJid && phoneOrJid.includes('@') ? normalizeJid(phoneOrJid) : null;
     const result = await this.pool.query(
       `
       SELECT
         u.id AS user_id,
         u.phone,
+        u.jid,
         u.name AS user_name,
         u.role,
         p.id AS persona_id,
@@ -191,16 +215,34 @@ class PostgresRepository {
       FROM users u
       JOIN user_personas up ON up.user_id = u.id
       JOIN personas p ON p.id = up.persona_id
-      WHERE regexp_replace(u.phone, '[^0-9]', '', 'g') = $1
+      WHERE (
+        regexp_replace(u.phone, '[^0-9]', '', 'g') = $1
+        OR lower(u.jid) = $2
+        OR regexp_replace(u.jid, '[^0-9]', '', 'g') = $1
+      )
       LIMIT 1;
     `,
-      [phone],
+      [cleanedPhone, normalizedJid],
     );
     if (result.rowCount === 0) {
       return null;
     }
 
     return result.rows[0];
+  }
+
+  async getPersonaByName(name) {
+    if (!name || typeof name !== 'string') {
+      return null;
+    }
+
+    const normalizedName = name.trim().toLowerCase();
+    const result = await this.pool.query(
+      `SELECT id, name, system_prompt FROM personas WHERE lower(name) = $1 LIMIT 1`,
+      [normalizedName],
+    );
+
+    return result.rows[0] || null;
   }
 
   async disconnect() {
