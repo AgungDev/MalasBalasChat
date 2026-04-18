@@ -1,0 +1,44 @@
+version: '3.9'
+
+services:
+  app-malaschat:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: wa-bot
+    ports:
+      - "9092:9092"
+    env_file:
+      - .env
+    depends_on:
+      - db-malaschat
+    networks:
+      - malaschat-network
+    restart: on-failure
+
+  db-malaschat:
+    image: postgres:15
+    container_name: postgres-malaschat
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: malaschat_bot
+    ports:
+      - "5444:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - malaschat-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+
+networks:
+  malaschat-network:
+    driver: bridge

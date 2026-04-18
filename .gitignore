@@ -1,0 +1,32 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.so.*
+*.dylib
+
+# Node modules
+node_modules/
+
+# Test binary
+*.test
+
+# Output files
+*.out
+
+# Environment variables
+.env
+.env.local
+
+# Session files
+session/
+session.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build output
+bin/
+dist/

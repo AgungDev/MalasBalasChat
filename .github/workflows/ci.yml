@@ -1,0 +1,64 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: malaschat_bot
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install dependencies
+      run: |
+        cd node-whatsapp
+        npm install
+
+    - name: Syntax check
+      run: |
+        cd node-whatsapp
+        node --check src/index.js src/config.js src/repository/postgresRepository.js src/services/aiService.js src/services/whatsappClient.js src/usecases/replyUsecase.js src/server.js
+
+    - name: Run basic smoke test
+      run: |
+        cd node-whatsapp
+        npm start &
+        sleep 5
+        curl --fail http://localhost:9092/health
+
+  docker:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Build Docker image
+      run: docker build -f docker/Dockerfile -t wa-bot:latest .
+
+    - name: Test Docker image
+      run: docker run --rm wa-bot:latest node --version
