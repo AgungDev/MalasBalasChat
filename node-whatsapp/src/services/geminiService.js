@@ -5,11 +5,11 @@ class GeminiService {
     }
 
     this.apiKey = apiKey;
-    this.model = model || 'gemini-1.5-pro';
+    this.model = model || 'gemini-2.5-flash-lite';
+    this.fallbackModels = ['gemini-2.5-flash-lite', 'gemini-2.5-flash'];
   }
 
   async generateReply(systemPrompt, userMessage) {
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`;
     const payload = {
       contents: [
         {
@@ -25,22 +25,65 @@ class GeminiService {
       },
     };
 
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
+    const modelCandidates = [
+      this.model,
+      ...this.fallbackModels.filter((candidate) => candidate !== this.model),
+    ];
 
-    if (!response.ok) {
-      const responseText = await response.text();
-      throw new Error(`Gemini request failed: ${response.status} ${response.statusText} - ${responseText}`);
+    let lastError;
+
+    for (const model of modelCandidates) {
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.apiKey}`;
+
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          const responseText = await response.text();
+          const error = new Error(`Gemini request failed: ${response.status} ${response.statusText} - ${responseText}`);
+          error.status = response.status;
+          error.responseText = responseText;
+
+          if (response.status === 404 && model !== this.model) {
+            console.warn('GeminiService: fallback model also failed, continuing to next candidate', {
+              model,
+              status: response.status,
+            });
+            lastError = error;
+            continue;
+          }
+
+          throw error;
+        }
+
+        const data = await response.json();
+        const result = this.extractGeminiText(data);
+        return result ? result.trim() : null;
+      } catch (error) {
+        if (error.status === 404 && model === this.model) {
+          console.warn('GeminiService: configured model failed, trying fallback model', {
+            model,
+            error: error.message,
+          });
+          lastError = error;
+          continue;
+        }
+
+        throw error;
+      }
     }
 
-    const data = await response.json();
-    const result = this.extractGeminiText(data);
-    return result ? result.trim() : null;
+    if (lastError) {
+      throw lastError;
+    }
+
+    return null;
   }
 
   extractGeminiText(data) {
