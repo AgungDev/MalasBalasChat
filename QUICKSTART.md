@@ -4,7 +4,7 @@
 
 ### Step 1: Configure API Key
 ```bash
-cp .env.example .env
+# .env is already configured
 # Edit .env and set OPENAI_API_KEY and DB settings
 ```
 

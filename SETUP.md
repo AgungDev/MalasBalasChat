@@ -16,8 +16,8 @@ cd MalasBalasChat
 
 #### 2. Configure Environment
 ```bash
-cp .env.example .env
-# Edit .env with your values
+# .env is already configured
+# Update values as needed
 ```
 
 #### 3. Start Services
@@ -56,8 +56,8 @@ npm install
 
 #### 2. Configure Environment
 ```bash
-cp .env.example .env
-# Update OpenAI and DB values
+# .env is already configured
+# Update OpenAI and DB values as needed
 ```
 
 #### 3. Run Application

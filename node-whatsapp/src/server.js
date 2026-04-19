@@ -1,6 +1,7 @@
 const express = require('express');
 const createPersonasController = require('./controllers/personasController');
 const createUsersController = require('./controllers/usersController');
+const createAIConfigController = require('./controllers/aiConfigController');
 const { buildWhatsAppJid } = require('./utils/random');
 
 function createServer(appConfig, whatsappClient, replyUsecase, repository) {
@@ -9,6 +10,7 @@ function createServer(appConfig, whatsappClient, replyUsecase, repository) {
 
   const personasController = createPersonasController(repository);
   const usersController = createUsersController(repository);
+  const aiConfigController = createAIConfigController(repository);
 
   app.get('/health', (req, res) => {
     res.json({ status: 'success', message: 'healthy', data: { status: 'ok' } });
@@ -33,6 +35,13 @@ function createServer(appConfig, whatsappClient, replyUsecase, repository) {
   app.post('/users/:user_id/persona', usersController.assignPersona);
   app.delete('/users/:user_id/persona', usersController.removePersona);
   app.get('/users/:phone/persona', usersController.getUserPersona);
+
+  app.post('/ai-config', aiConfigController.createAIConfig);
+  app.get('/ai-config', aiConfigController.listAIConfigs);
+  app.get('/ai-config/active', aiConfigController.getActiveAIConfig);
+  app.get('/ai-config/:id', aiConfigController.getAIConfig);
+  app.put('/ai-config/:id', aiConfigController.updateAIConfig);
+  app.delete('/ai-config/:id', aiConfigController.deleteAIConfig);
 
   app.post('/messages/handle', async (req, res) => {
     const { from, content } = req.body;

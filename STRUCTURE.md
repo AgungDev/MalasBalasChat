@@ -6,7 +6,7 @@ MalasBalasChat/
 │   └── Dockerfile
 ├── node-whatsapp/
 │   ├── package.json
-│   ├── .env.example
+│   ├── .env
 │   ├── src/
 │   │   ├── config.js
 │   │   ├── index.js
@@ -27,7 +27,7 @@ MalasBalasChat/
 ├── SETUP.md
 ├── DEVELOPMENT.md
 ├── CONTRIBUTING.md
-├── .env.example
+├── .env
 └── .github/
 ```
 

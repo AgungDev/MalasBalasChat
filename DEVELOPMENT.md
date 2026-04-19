@@ -10,7 +10,7 @@
 
 ### 1. Environment Setup
 ```bash
-cp .env.example .env
+# .env already exists in this repo
 # Edit .env with your values
 ```
 

@@ -51,7 +51,7 @@ fi
 # Create .env if not exists
 if [ ! -f .env ]; then
     echo -e "\n${YELLOW}Creating .env file...${NC}"
-    cp .env.example .env
+    # .env is already configured
     echo -e "${GREEN}✓ .env file created (update with your OpenAI API key)${NC}"
 else
     echo -e "${YELLOW}⚠ .env file already exists${NC}"

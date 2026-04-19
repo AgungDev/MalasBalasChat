@@ -53,7 +53,7 @@ node-whatsapp/
 │   └── utils/
 │       └── random.js
 ├── package.json
-├── .env.example
+├── .env
 └── README.md
 ```
 
@@ -224,6 +224,12 @@ The Node.js bot also exposes simple endpoints:
 * `GET /health` — service health
 * `GET /status` — WhatsApp socket status
 * `POST /send` — manual send via WhatsApp
+* `POST /ai-config` — create or replace global AI personality config
+* `GET /ai-config` — get current global AI config
+* `GET /ai-config/active` — get current global AI config (alias)
+* `GET /ai-config/:id` — fetch global AI config by id
+* `PUT /ai-config/:id` — update global AI config
+* `DELETE /ai-config/:id` — delete global AI config
 
 Example request:
 
@@ -241,7 +247,8 @@ curl -X POST http://localhost:9092/send \
 * Adds random delay before reply
 * Limits reply length for natural tone
 * May skip replies to simulate human behavior
-* Uses persona prompt from PostgreSQL
+* Uses a single global AI config prompt from database
+* Falls back to persona prompt only when no global config exists
 
 ---
 
@@ -250,6 +257,7 @@ curl -X POST http://localhost:9092/send \
 * Keep `OPENAI_API_KEY` out of source control
 * `WHATSAPP_SESSION_DIR` stores Baileys session files
 * Use the existing PostgreSQL schema for persona mapping
+* Global AI personality is stored in `ai_configs` as a single config
 
 ---
 

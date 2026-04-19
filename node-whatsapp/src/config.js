@@ -41,7 +41,7 @@ module.exports = {
     whitelistNumbers: parseNumberList(process.env.WHITELIST_NUMBERS || ''),
     maxReplyLength: Number(process.env.MAX_REPLY_LENGTH || 360),
     skipReplyRate: Number(process.env.SKIP_REPLY_RATE || 0),
-    replyDelayMin: Number(process.env.REPLY_DELAY_MIN || 3000),
-    replyDelayMax: Number(process.env.REPLY_DELAY_MAX || 15000),
+    replyDelayMin: Number(process.env.REPLY_DELAY_MIN || 8000),
+    replyDelayMax: Number(process.env.REPLY_DELAY_MAX || 30000),
   },
 };

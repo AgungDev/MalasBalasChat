@@ -9,23 +9,26 @@ class GeminiService {
   }
 
   async generateReply(systemPrompt, userMessage) {
-    const endpoint = `https://gemini.googleapis.com/v1/models/${this.model}:generateMessage`;
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`;
     const payload = {
-      prompt: {
-        messages: [
-          { author: 'system', content: systemPrompt },
-          { author: 'user', content: userMessage },
-        ],
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { text: systemPrompt + '\n\nUser message: ' + userMessage },
+          ],
+        },
+      ],
+      generationConfig: {
+        temperature: 0.8,
+        maxOutputTokens: 500,
       },
-      temperature: 0.8,
-      maxOutputTokens: 500,
     };
 
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.apiKey}`,
       },
       body: JSON.stringify(payload),
     });
@@ -50,33 +53,14 @@ class GeminiService {
       return null;
     }
 
-    const content = candidate.content;
-    if (!content) {
+    const parts = candidate?.content?.parts;
+    if (!Array.isArray(parts) || parts.length === 0) {
       return null;
     }
 
-    if (typeof content === 'string') {
-      return content;
-    }
-
-    if (Array.isArray(content)) {
-      for (const item of content) {
-        if (typeof item === 'string') {
-          return item;
-        }
-
-        if (item?.text) {
-          return item.text;
-        }
-
-        if (item?.message?.content?.text) {
-          return item.message.content.text;
-        }
-      }
-    }
-
-    if (typeof content?.text === 'string') {
-      return content.text;
+    const textPart = parts.find((p) => p.text);
+    if (textPart?.text) {
+      return textPart.text;
     }
 
     return null;

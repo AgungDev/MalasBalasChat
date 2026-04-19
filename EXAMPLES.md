@@ -87,6 +87,68 @@ curl http://localhost:9092/personas
 
 ---
 
+## 3.5. Global AI Config
+
+### Create global AI config
+```bash
+curl -X POST http://localhost:9092/ai-config \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Default AI","system_prompt":"You are a helpful Indonesian chat assistant. Reply politely, naturally, and keep the tone friendly."}'
+
+# Response:
+# {"status":"success","message":"AI config created successfully","data":{"id":1}}
+```
+
+### Get all AI configs
+```bash
+curl http://localhost:9092/ai-config
+
+# Response:
+# [
+#   {
+#     "id": 1,
+#     "name": "Default AI",
+#     "system_prompt": "You are a helpful Indonesian chat assistant. Reply politely, naturally, and keep the tone friendly.",
+#     "created_at": "...",
+#     "updated_at": "..."
+#   }
+# ]
+```
+
+### Get active AI config
+```bash
+curl http://localhost:9092/ai-config/active
+
+# Response:
+# {
+#   "id": 1,
+#   "name": "Default AI",
+#   "system_prompt": "You are a helpful Indonesian chat assistant. Reply politely, naturally, and keep the tone friendly.",
+#   "created_at": "...",
+#   "updated_at": "..."
+# }
+```
+
+### Update global AI config
+```bash
+curl -X PUT http://localhost:9092/ai-config/1 \
+  -H "Content-Type: application/json" \
+  -d '{"system_prompt":"You are a helpful Indonesian chat assistant. Reply warmly, naturally, and give concise answers."}'
+
+# Response:
+# {"status":"success","message":"AI config updated successfully","data":{"id":1,...}}
+```
+
+### Delete global AI config
+```bash
+curl -X DELETE http://localhost:9092/ai-config/1
+
+# Response:
+# {"status":"success","message":"AI config deleted successfully","data":{}}
+```
+
+---
+
 ## 4. Create Users
 
 ### Create User 1

@@ -19,10 +19,11 @@ class ReplyUsecase {
     }
 
     const normalizedRole = (role || '').toLowerCase();
-    return (
-      allowedRoles.includes(normalizedRole) ||
-      this.config.whitelistNumbers.includes(phone)
-    );
+    if (normalizedRole && allowedRoles.includes(normalizedRole)) {
+      return true;
+    }
+
+    return this.config.whitelistNumbers.includes(phone);
   }
 
   async createReply(senderJid, messageText, { senderPn } = {}) {
@@ -39,7 +40,10 @@ class ReplyUsecase {
       return null;
     }
 
+    const globalAIConfig = await this.repository.getGlobalAIConfig();
+    let systemPrompt = globalAIConfig ? globalAIConfig.system_prompt : null;
     let userPersona = await this.repository.getUserPersonaByPhone(senderJid);
+
     if (!userPersona && senderPn) {
       const personaByPn = await this.repository.getUserPersonaByPhone(senderPn);
       if (personaByPn) {
@@ -97,25 +101,30 @@ class ReplyUsecase {
       }
     }
 
-    if (!userPersona) {
-      console.warn('ReplyUsecase: user persona not found for sender', { senderJid, senderPn, phone });
+    if (!systemPrompt && !userPersona) {
+      console.warn('ReplyUsecase: user persona not found and no global AI config exists for sender', { senderJid, senderPn, phone });
       return null;
     }
 
-    const contactPhone = userPersona.phone || phone;
-    console.info('ReplyUsecase: found persona mapping', {
-      userId: userPersona.user_id,
-      phone: userPersona.phone,
-      jid: userPersona.jid,
-      role: userPersona.role,
-      personaId: userPersona.persona_id,
-      personaName: userPersona.persona_name,
+    if (!systemPrompt && userPersona) {
+      systemPrompt = userPersona.system_prompt;
+    }
+
+    const contactPhone = (userPersona && userPersona.phone) || phone;
+    const contactRole = userPersona ? userPersona.role : null;
+
+    console.info('ReplyUsecase: selected system prompt source', {
+      hasGlobalAIConfig: Boolean(globalAIConfig),
+      personaUsed: Boolean(!globalAIConfig && userPersona),
+      contactPhone,
+      contactRole,
+      systemPromptPreview: systemPrompt ? systemPrompt.slice(0, 80) : null,
     });
 
-    if (!this.isAllowedContact(userPersona.role, contactPhone)) {
+    if (!this.isAllowedContact(contactRole, contactPhone)) {
       console.warn('ReplyUsecase: contact not allowed to receive reply', {
         phone: contactPhone,
-        role: userPersona.role,
+        role: contactRole,
         allowedRoles: this.config.allowedRoles,
       });
       return null;
@@ -131,7 +140,7 @@ class ReplyUsecase {
     await this.applyRandomDelay();
 
     const reply = await this.aiService.generateReply(
-      userPersona.system_prompt,
+      systemPrompt,
       messageText,
     );
 

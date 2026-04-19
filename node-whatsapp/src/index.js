@@ -5,6 +5,7 @@ const OpenAIService = require('./services/openAIService');
 const GeminiService = require('./services/geminiService');
 const GroqService = require('./services/groqService');
 const AIService = require('./services/aiService');
+const DelayMessageService = require('./services/delayMessageService');
 const ReplyUsecase = require('./usecases/replyUsecase');
 const WhatsAppClient = require('./services/whatsappClient');
 const { createServer } = require('./server');
@@ -24,6 +25,18 @@ async function start() {
   const aiService = new AIService(openAIService, geminiService, groqService);
   const replyUsecase = new ReplyUsecase(repository, aiService, config.whatsapp);
 
+  const delayMessageService = new DelayMessageService(config.whatsapp, async (senderJid, combinedText, metadata) => {
+    const reply = await replyUsecase.createReply(senderJid, combinedText, metadata);
+    if (!reply) {
+      console.warn('Index: delayed reply generated no content for', { senderJid });
+      return;
+    }
+
+    const targetJid = metadata.remoteJid || senderJid;
+    await whatsappClient.sendText(targetJid, reply);
+    console.info(`Index: sent delayed reply to ${targetJid}: ${reply.slice(0, 120)}`);
+  });
+
   const whatsappClient = new WhatsAppClient({
     sessionDir: path.resolve(process.cwd(), config.whatsapp.sessionDir),
     onMessage: async (payload) => {
@@ -36,6 +49,14 @@ async function start() {
       }
 
       try {
+        const assignedPersona = await repository.getUserPersonaByPhone(senderJid) ||
+          (senderPn ? await repository.getUserPersonaByPhone(senderPn) : null);
+
+        if (assignedPersona) {
+          await delayMessageService.enqueue(senderJid, text, { senderPn, remoteJid });
+          return;
+        }
+
         const reply = await replyUsecase.createReply(senderJid, text, { senderPn });
         if (!reply) {
           console.warn('Index: no reply generated for message', { remoteJid, senderJid, senderPn });

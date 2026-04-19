@@ -27,7 +27,7 @@ This folder contains a Node.js WhatsApp bot service that replaces the Go `whatsm
 
 ## Getting Started
 
-1. Copy `.env.example` to `.env` and fill your credentials.
+1. Create `.env` file and fill your credentials.
 2. Install dependencies:
 
 ```bash
@@ -43,7 +43,8 @@ npm start
 
 ## Integration Notes
 
-- Shares the existing PostgreSQL schema for `users`, `personas`, and `user_personas`
+- Shares the existing PostgreSQL schema for `users`, `personas`, `user_personas`, and `ai_configs`
+- Global AI personality prompt is stored in the `ai_configs` table as a single config
 - Can be integrated with other services via the same database or by calling the HTTP `/send` endpoint
 - Use `APP_PORT` to separate the Node service from other services
 
@@ -52,3 +53,9 @@ npm start
 - `GET /health` — simple health check
 - `GET /status` — socket connection status
 - `POST /send` — send a message manually via WhatsApp
+- `POST /ai-config` — create or replace the single global AI personality config
+- `GET /ai-config` — read the current global AI config
+- `GET /ai-config/active` — read the current global AI config (alias)
+- `GET /ai-config/:id` — fetch the global AI config by ID
+- `PUT /ai-config/:id` — update the global AI config
+- `DELETE /ai-config/:id` — delete the global AI config

@@ -54,6 +54,14 @@ class PostgresRepository {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
       );
+
+      CREATE TABLE IF NOT EXISTS ai_configs (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        system_prompt TEXT NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+      );
     `;
 
     await this.pool.query(sql);
@@ -81,6 +89,65 @@ class PostgresRepository {
       [id],
     );
     return result.rows[0] || null;
+  }
+
+  async createAIConfig({ name, system_prompt }) {
+    const existing = await this.getGlobalAIConfig();
+    if (existing) {
+      const config = await this.updateAIConfig(existing.id, { name, system_prompt });
+      await this.pool.query('DELETE FROM ai_configs WHERE id <> $1', [existing.id]);
+      return config;
+    }
+
+    const result = await this.pool.query(
+      `INSERT INTO ai_configs (name, system_prompt) VALUES ($1, $2) RETURNING id, name, system_prompt, created_at, updated_at`,
+      [name, system_prompt],
+    );
+
+    return result.rows[0];
+  }
+
+  async getAllAIConfigs() {
+    const result = await this.pool.query(
+      `SELECT id, name, system_prompt, created_at, updated_at FROM ai_configs ORDER BY id ASC`,
+    );
+    return result.rows;
+  }
+
+  async getAIConfigById(id) {
+    const result = await this.pool.query(
+      `SELECT id, name, system_prompt, created_at, updated_at FROM ai_configs WHERE id = $1`,
+      [id],
+    );
+    return result.rows[0] || null;
+  }
+
+  async getGlobalAIConfig() {
+    const result = await this.pool.query(
+      `SELECT id, name, system_prompt, created_at, updated_at FROM ai_configs ORDER BY id ASC LIMIT 1`,
+    );
+    return result.rows[0] || null;
+  }
+
+  async updateAIConfig(id, { name, system_prompt }) {
+    const result = await this.pool.query(
+      `UPDATE ai_configs
+       SET name = COALESCE(NULLIF($1, ''), name),
+           system_prompt = COALESCE(NULLIF($2, ''), system_prompt),
+           updated_at = now()
+       WHERE id = $3
+       RETURNING id, name, system_prompt, created_at, updated_at`,
+      [name, system_prompt, id],
+    );
+    return result.rows[0] || null;
+  }
+
+  async deleteAIConfig(id) {
+    const result = await this.pool.query(
+      `DELETE FROM ai_configs WHERE id = $1 RETURNING id`,
+      [id],
+    );
+    return result.rowCount > 0;
   }
 
   async updatePersona(id, { name, system_prompt }) {
@@ -242,6 +309,19 @@ class PostgresRepository {
       [normalizedName],
     );
 
+    return result.rows[0] || null;
+  }
+
+  async getAIConfigByName(name) {
+    if (!name || typeof name !== 'string') {
+      return null;
+    }
+
+    const normalizedName = name.trim().toLowerCase();
+    const result = await this.pool.query(
+      `SELECT id, name, system_prompt, created_at, updated_at FROM ai_configs WHERE lower(name) = $1 LIMIT 1`,
+      [normalizedName],
+    );
     return result.rows[0] || null;
   }
 

@@ -16,7 +16,7 @@
 
 ```bash
 # Copy production template
-cp .env.example .env
+# .env is already configured
 
 # Edit with production values
 nano .env
