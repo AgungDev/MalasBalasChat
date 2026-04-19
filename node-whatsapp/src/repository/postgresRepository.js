@@ -41,12 +41,16 @@ class PostgresRepository {
         jid TEXT UNIQUE,
         name TEXT NOT NULL,
         role TEXT NOT NULL,
+        gender TEXT,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
       );
 
       ALTER TABLE users
       ADD COLUMN IF NOT EXISTS jid TEXT UNIQUE;
+
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS gender TEXT;
 
       CREATE TABLE IF NOT EXISTS user_personas (
         user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -171,19 +175,19 @@ class PostgresRepository {
     return result.rowCount > 0;
   }
 
-  async createUser({ phone, jid, name, role }) {
+  async createUser({ phone, jid, name, role, gender }) {
     const cleanedPhone = phone ? phone.replace(/[^0-9]/g, '') : null;
     const normalizedJid = normalizeJid(jid);
     const result = await this.pool.query(
-      `INSERT INTO users (phone, jid, name, role) VALUES ($1, $2, $3, $4) RETURNING id, phone, jid, name, role, created_at, updated_at`,
-      [cleanedPhone, normalizedJid, name, role],
+      `INSERT INTO users (phone, jid, name, role, gender) VALUES ($1, $2, $3, $4, $5) RETURNING id, phone, jid, name, role, gender, created_at, updated_at`,
+      [cleanedPhone, normalizedJid, name, role, gender],
     );
     return result.rows[0];
   }
 
   async getAllUsers() {
     const result = await this.pool.query(
-      `SELECT id, phone, jid, name, role, created_at, updated_at FROM users ORDER BY id ASC`,
+      `SELECT id, phone, jid, name, role, gender, created_at, updated_at FROM users ORDER BY id ASC`,
     );
     return result.rows;
   }
@@ -192,7 +196,7 @@ class PostgresRepository {
     const cleanedPhone = normalizePhone(phone);
     const normalizedJid = phone && phone.includes('@') ? normalizeJid(phone) : null;
     const result = await this.pool.query(
-      `SELECT id, phone, jid, name, role, created_at, updated_at FROM users
+      `SELECT id, phone, jid, name, role, gender, created_at, updated_at FROM users
        WHERE (lower(jid) = $1 OR regexp_replace(phone, '[^0-9]', '', 'g') = $2)
        LIMIT 1`,
       [normalizedJid, cleanedPhone],
@@ -206,13 +210,13 @@ class PostgresRepository {
       `UPDATE users
        SET jid = COALESCE(NULLIF($1, ''), jid), updated_at = now()
        WHERE id = $2
-       RETURNING id, phone, jid, name, role, created_at, updated_at`,
+       RETURNING id, phone, jid, name, role, gender, created_at, updated_at`,
       [normalizedJid, userId],
     );
     return result.rows[0] || null;
   }
 
-  async updateUserByPhone(phone, { newPhone, name, role }) {
+  async updateUserByPhone(phone, { newPhone, name, role, gender }) {
     const cleanedPhone = phone ? phone.replace(/[^0-9]/g, '') : null;
     const cleanedNewPhone = newPhone ? newPhone.replace(/[^0-9]/g, '') : null;
     const result = await this.pool.query(
@@ -220,10 +224,11 @@ class PostgresRepository {
        SET phone = COALESCE(NULLIF($1, ''), phone),
            name = COALESCE(NULLIF($2, ''), name),
            role = COALESCE(NULLIF($3, ''), role),
+           gender = COALESCE(NULLIF($4, ''), gender),
            updated_at = now()
-       WHERE regexp_replace(phone, '[^0-9]', '', 'g') = $4
-       RETURNING id, phone, name, role, created_at, updated_at`,
-      [cleanedNewPhone, name, role, cleanedPhone],
+       WHERE regexp_replace(phone, '[^0-9]', '', 'g') = $5
+       RETURNING id, phone, name, role, gender, created_at, updated_at`,
+      [cleanedNewPhone, name, role, gender, cleanedPhone],
     );
     return result.rows[0] || null;
   }
@@ -239,7 +244,7 @@ class PostgresRepository {
 
   async getUserById(id) {
     const result = await this.pool.query(
-      `SELECT id, phone, jid, name, role, created_at, updated_at FROM users WHERE id = $1`,
+      `SELECT id, phone, jid, name, role, gender, created_at, updated_at FROM users WHERE id = $1`,
       [id],
     );
     return result.rows[0] || null;
@@ -276,6 +281,7 @@ class PostgresRepository {
         u.jid,
         u.name AS user_name,
         u.role,
+        u.gender,
         p.id AS persona_id,
         p.name AS persona_name,
         p.system_prompt

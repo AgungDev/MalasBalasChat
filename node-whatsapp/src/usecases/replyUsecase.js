@@ -69,6 +69,7 @@ class ReplyUsecase {
             jid: user.jid,
             user_name: user.name,
             role: user.role,
+            gender: user.gender,
             persona_id: personaByRole.id,
             persona_name: personaByRole.name,
             system_prompt: personaByRole.system_prompt,
@@ -101,23 +102,43 @@ class ReplyUsecase {
       }
     }
 
-    if (!systemPrompt && !userPersona) {
-      console.warn('ReplyUsecase: user persona not found and no global AI config exists for sender', { senderJid, senderPn, phone });
-      return null;
+    // Combine global AI config + user persona if both exist
+    let genderContext = '';
+    if (userPersona && userPersona.gender) {
+      if (userPersona.gender.toLowerCase() === 'perempuan' || userPersona.gender.toLowerCase() === 'female' || userPersona.gender.toLowerCase() === 'p') {
+        genderContext = `\n(Catatan: ${userPersona.user_name} adalah teman cewek, jadi panggil dengan nama atau sebutan yang sesuai untuk teman cewek, bukan "bang" atau panggilan yang terlalu casual/negatif)`;
+      } else if (userPersona.gender.toLowerCase() === 'laki-laki' || userPersona.gender.toLowerCase() === 'male' || userPersona.gender.toLowerCase() === 'l') {
+        genderContext = `\n(Catatan: ${userPersona.user_name} adalah teman cowok, jadi panggil dengan nama atau "bang" jika cocok dengan gaya komunikasi)`;
+      }
     }
 
-    if (!systemPrompt && userPersona) {
-      systemPrompt = userPersona.system_prompt;
+    if (userPersona && userPersona.system_prompt) {
+      const separator = userPersona.system_prompt.length > 65 ? '\n\n' : '\n';
+      if (systemPrompt) {
+        // Combine both: global config + persona + gender context
+        systemPrompt = `${systemPrompt}${separator}${userPersona.system_prompt}${genderContext}`;
+        console.info('ReplyUsecase: combined global AI config with user persona', {
+          senderJid,
+          userId: userPersona.user_id,
+          genderUsed: userPersona.gender,
+        });
+      } else {
+        // Only persona exists
+        systemPrompt = `${userPersona.system_prompt}${genderContext}`;
+      }
     }
 
     const contactPhone = (userPersona && userPersona.phone) || phone;
     const contactRole = userPersona ? userPersona.role : null;
+    const contactGender = userPersona ? userPersona.gender : null;
+    const personaUsed = Boolean(userPersona);
 
     console.info('ReplyUsecase: selected system prompt source', {
       hasGlobalAIConfig: Boolean(globalAIConfig),
-      personaUsed: Boolean(!globalAIConfig && userPersona),
+      personaUsed,
       contactPhone,
       contactRole,
+      contactGender,
       systemPromptPreview: systemPrompt ? systemPrompt.slice(0, 80) : null,
     });
 

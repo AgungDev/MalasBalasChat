@@ -1,12 +1,12 @@
 function createUsersController(repository) {
   const createUser = async (req, res) => {
-    const { phone, name, role } = req.body;
+    const { phone, name, role, gender } = req.body;
     if (!phone || !name || !role) {
       return res.status(400).json({ status: 'error', message: 'phone, name, and role are required' });
     }
 
     try {
-      const user = await repository.createUser({ phone, name, role });
+      const user = await repository.createUser({ phone, name, role, gender });
       return res.json({ status: 'success', message: 'User created successfully', data: { id: user.id } });
     } catch (error) {
       return res.status(500).json({ status: 'error', message: error.message || 'Failed to create user' });
@@ -37,13 +37,13 @@ function createUsersController(repository) {
 
   const updateUser = async (req, res) => {
     const { phone } = req.params;
-    const { newPhone, name, role } = req.body;
-    if (!newPhone && !name && !role) {
-      return res.status(400).json({ status: 'error', message: 'At least one of newPhone, name, or role is required' });
+    const { newPhone, name, role, gender } = req.body;
+    if (!newPhone && !name && !role && !gender) {
+      return res.status(400).json({ status: 'error', message: 'At least one of newPhone, name, role, or gender is required' });
     }
 
     try {
-      const user = await repository.updateUserByPhone(phone, { newPhone, name, role });
+      const user = await repository.updateUserByPhone(phone, { newPhone, name, role, gender });
       if (!user) {
         return res.status(404).json({ status: 'error', message: 'User not found' });
       }
