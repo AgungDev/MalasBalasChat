@@ -27,6 +27,8 @@ curl http://localhost:9092/health
 
 **Done! The service should respond with JSON.**
 
+**Note:** On first run, the database will be automatically seeded with dummy personas, users, assignments, and global AI config.
+
 ---
 
 ## 5-Minute Setup

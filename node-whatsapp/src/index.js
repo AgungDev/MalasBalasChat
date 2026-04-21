@@ -19,6 +19,14 @@ async function start() {
   await repository.connect();
   await repository.initializeSchema();
 
+  // Seed database with dummy data if empty
+  const existingPersonas = await repository.getAllPersonas();
+  if (existingPersonas.length === 0) {
+    console.log('Database is empty, seeding with dummy data...');
+    const seedDatabase = require('./seed');
+    await seedDatabase(repository);
+  }
+
   const openAIService = config.openAI.apiKey ? new OpenAIService(config.openAI) : null;
   const geminiService = config.gemini.apiKey ? new GeminiService(config.gemini) : null;
   const groqService = config.groq.apiKey ? new GroqService(config.groq) : null;
@@ -57,14 +65,8 @@ async function start() {
           return;
         }
 
-        const reply = await replyUsecase.createReply(senderJid, text, { senderPn });
-        if (!reply) {
-          console.warn('Index: no reply generated for message', { remoteJid, senderJid, senderPn });
-          return;
-        }
-
-        await whatsappClient.sendText(remoteJid, reply);
-        console.info(`Index: sent reply to ${remoteJid}: ${reply.slice(0, 120)}`);
+        // Removed: No longer reply to unassigned users
+        console.info('Index: message from unassigned user, not replying', { remoteJid, senderJid, senderPn });
       } catch (error) {
         console.error('Index: failed to process message', error);
         // Don't crash the bot, just log the error
